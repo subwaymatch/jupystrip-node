@@ -2,10 +2,7 @@ import { promises as fs } from "fs";
 import * as path from "path";
 import * as _ from "lodash";
 import * as stringSimilarity from "string-similarity";
-
-const studentFilePath = "./test-files/test_starter.ipynb";
-const solutionFilePath = "./test-files/test_solution.ipynb";
-const graderCellKeywordPattern = "# GRADER[S_ ]{0,2}ONLY";
+import * as glob from "glob";
 
 export interface ICell {
   cell_type: string;
@@ -25,13 +22,13 @@ export interface IInsertCellGroup {
   matchCell?: ICell;
 }
 
-function doesCellContainPattern(cell: ICell, pattern: string | RegExp) {
+export function doesCellContainPattern(cell: ICell, pattern: string | RegExp) {
   if (!(pattern instanceof RegExp)) {
     pattern = new RegExp(pattern);
   }
 
   // Notebook cells can either be a string or an array of strings
-  // If string, convert it to am array of strings
+  // If string, convert it to an array of strings
   const lines = Array.isArray(cell.source) ? cell.source : [cell.source];
 
   for (const line of lines) {
@@ -43,7 +40,7 @@ function doesCellContainPattern(cell: ICell, pattern: string | RegExp) {
   return false;
 }
 
-function getEmptyInsertCellGroup() {
+export function getEmptyInsertCellGroup() {
   return {
     cells: [],
     insertPosition: null,
@@ -51,14 +48,17 @@ function getEmptyInsertCellGroup() {
   };
 }
 
-function getInsertCellGroups(cells: ICell[]): IInsertCellGroup[] {
+export function getInsertCellGroups(
+  cells: ICell[],
+  pattern: string | RegExp
+): IInsertCellGroup[] {
   const groups: IInsertCellGroup[] = [];
 
   let group: IInsertCellGroup = null;
 
   for (let i = 0; i < cells.length; i++) {
     const cell = cells[i];
-    const isGraderCell = doesCellContainPattern(cell, graderCellKeywordPattern);
+    const isGraderCell = doesCellContainPattern(cell, pattern);
 
     if (isGraderCell) {
       group = group ? group : getEmptyInsertCellGroup();
@@ -72,7 +72,7 @@ function getInsertCellGroups(cells: ICell[]): IInsertCellGroup[] {
           group.insertPosition = CellInsertPosition.Last;
           groups.push(group);
         } else {
-          if (!doesCellContainPattern(cells[i + 1], graderCellKeywordPattern)) {
+          if (!doesCellContainPattern(cells[i + 1], pattern)) {
             group.insertPosition = CellInsertPosition.BeforeCell;
             group.matchCell = cells[i + 1];
           }
@@ -89,50 +89,124 @@ function getInsertCellGroups(cells: ICell[]): IInsertCellGroup[] {
   return groups;
 }
 
-function findCellIndex(cell: ICell): number {
+export function cellToString(cell: ICell, includeType = false) {
+  // Notebook cells can either be a string or an array of strings
+  // If array, convert it to a string
+  let cellStr = Array.isArray(cell.source)
+    ? cell.source.join(",")
+    : cell.source;
+
+  if (includeType) {
+    cellStr = `[${cell.cell_type}] ${cellStr}`;
+  }
+
+  return cellStr;
+}
+
+export function findCellIndex(
+  findCell: ICell,
+  cells: ICell[],
+  matchType = true
+): number {
+  const findCellStr = cellToString(findCell, matchType);
+  const cellStrs = cells.map((o) => cellToString(o, matchType));
+
+  const similarityMatches = stringSimilarity.findBestMatch(
+    findCellStr,
+    cellStrs
+  );
+
+  if (similarityMatches.bestMatch.rating >= 0.9) {
+    return similarityMatches.bestMatchIndex;
+  } else {
+    console.log("===================");
+    console.log(`Unable to find a matching cell position`);
+    console.log(findCellStr);
+    console.log(similarityMatches.bestMatch);
+  }
+
+  // No match
   return -1;
 }
 
-(async () => {
-  const studentNotebookJSON = await fs.readFile(studentFilePath, "utf-8");
-  const studentNotebook = JSON.parse(studentNotebookJSON);
-  let studentCells = studentNotebook["cells"];
+export async function unstripFiles(
+  filePaths: string[],
+  originalFilePath: string,
+  pattern: string | RegExp
+) {
+  const originalNotebookJSON = await fs.readFile(originalFilePath, "utf-8");
+  const originalNotebook = JSON.parse(originalNotebookJSON);
+  const originalCells = originalNotebook["cells"];
+  const insertCellGroups = getInsertCellGroups(originalCells, pattern);
 
-  const solutionNotebookJSON = await fs.readFile(solutionFilePath, "utf-8");
-  const solutionNotebook = JSON.parse(solutionNotebookJSON);
-  const solutionCells = solutionNotebook["cells"];
+  for (const filePath of filePaths) {
+    console.log(`Unstripping ${filePath}`);
 
-  const insertCellGroups = getInsertCellGroups(solutionCells);
+    const targetNotebookJSON = await fs.readFile(filePath, "utf-8");
+    const targetNotebook = JSON.parse(targetNotebookJSON);
+    let unstrippedCells = targetNotebook["cells"];
 
-  console.log(`insertCellGroups`);
-  console.log(insertCellGroups);
+    for (const group of insertCellGroups) {
+      if (group.insertPosition === CellInsertPosition.First) {
+        unstrippedCells = group.cells.concat(unstrippedCells);
+      } else if (group.insertPosition === CellInsertPosition.BeforeCell) {
+        // Do nothing
+        const insertIndex = findCellIndex(group.matchCell, unstrippedCells);
 
-  let studentNotebookClone = _.cloneDeep(studentNotebook);
-  let unstrippedCells = studentNotebookClone["cells"];
-
-  for (const group of insertCellGroups) {
-    if (group.insertPosition === CellInsertPosition.First) {
-      unstrippedCells = group.cells.concat(unstrippedCells);
-    } else if (group.insertPosition === CellInsertPosition.BeforeCell) {
-      // Do nothing
-    } else if (group.insertPosition === CellInsertPosition.Last) {
-      unstrippedCells = unstrippedCells.concat(group.cells);
+        if (insertIndex >= 0) {
+          unstrippedCells = [
+            ...unstrippedCells.slice(0, insertIndex),
+            ...group.cells,
+            ...unstrippedCells.slice(insertIndex),
+          ];
+        } else {
+          // If a matching cell is not found, insert the cells to the end of the notebook
+          unstrippedCells = unstrippedCells.concat(group.cells);
+        }
+      } else if (group.insertPosition === CellInsertPosition.Last) {
+        unstrippedCells = unstrippedCells.concat(group.cells);
+      }
     }
+
+    targetNotebook["cells"] = unstrippedCells;
+
+    const pathObject = path.parse(filePath);
+    const newFilePath = path.format({
+      dir: pathObject.dir,
+      name: pathObject.name + "_unstripped",
+      ext: pathObject.ext,
+    });
+
+    await fs.writeFile(newFilePath, JSON.stringify(targetNotebook));
   }
+}
 
-  studentNotebookClone["cells"] = unstrippedCells;
+export async function unstripFile(
+  filePath: string,
+  originalFilePath: string,
+  pattern: string | RegExp
+) {
+  await unstripFiles([filePath], originalFilePath, pattern);
+}
 
-  const pathObject = path.parse(studentFilePath);
+(async () => {
+  const solutionFilePath =
+    "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/PCard_Solution_20210203.ipynb";
+  const graderCellKeywordPattern = "# GRADER[S_ ]{0,2}ONLY";
 
-  console.log(pathObject);
+  // await unstripFile(
+  //   studentFilePath,
+  //   solutionFilePath,
+  //   graderCellKeywordPattern
+  // );
 
-  const newFilePath = path.format({
-    dir: pathObject.dir,
-    name: pathObject.name + "_unstripped",
-    ext: pathObject.ext,
-  });
+  const filePaths = glob.sync(
+    "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/**/*.ipynb"
+  );
 
-  console.log(newFilePath);
+  console.log(`Start unstripping ${filePaths.length} files`);
 
-  await fs.writeFile(newFilePath, JSON.stringify(studentNotebookClone));
+  await unstripFiles(filePaths, solutionFilePath, graderCellKeywordPattern);
+
+  console.log("Done!");
 })();
