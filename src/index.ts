@@ -181,6 +181,69 @@ export async function unstripFiles(
   }
 }
 
+export async function stripFile(filePath: string, pattern: string | RegExp) {
+  const notebookJSON = await fs.readFile(filePath, "utf-8");
+  const notebookData = JSON.parse(notebookJSON);
+  const cells: ICell[] = notebookData["cells"];
+  const filteredCells: ICell[] = [];
+
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+
+    const isGraderCell = doesCellContainPattern(cell, pattern);
+
+    if (isGraderCell) {
+      if (i !== cells.length - 1) {
+        const nextCell = cells[i + 1];
+
+        if (!doesCellContainPattern(nextCell, pattern)) {
+          console.log("Mark metadata");
+          console.log(nextCell.source);
+
+          nextCell.metadata = Object.assign({}, nextCell.metadata, {
+            deletable: false,
+            editable: false,
+          });
+        }
+      }
+    } else {
+      if (cell.cell_type == "code") {
+        if (Array.isArray(cell.source)) {
+          let startReplace = false;
+          let newLines = [];
+
+          for (const line of cell.source) {
+            if (line.trim() === "# YOUR CODE BEGINS") {
+              newLines.push(line);
+              startReplace = true;
+            } else if (line.trim() === "# YOUR CODE ENDS") {
+              newLines.push(line);
+              startReplace = false;
+            } else {
+              newLines.push(startReplace ? "\n" : line);
+            }
+          }
+
+          cell.source = newLines;
+        }
+      }
+
+      filteredCells.push(cell);
+    }
+  }
+
+  notebookData["cells"] = filteredCells;
+
+  const pathObject = path.parse(filePath);
+  const newFilePath = path.format({
+    dir: pathObject.dir,
+    name: pathObject.name + "_stripped",
+    ext: pathObject.ext,
+  });
+
+  await fs.writeFile(newFilePath, JSON.stringify(notebookData));
+}
+
 export async function unstripFile(
   filePath: string,
   originalFilePath: string,
@@ -190,9 +253,13 @@ export async function unstripFile(
 }
 
 (async () => {
+  // const solutionFilePath =
+  //   "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/PCard_Solution_20210203.ipynb";
   const solutionFilePath =
-    "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/PCard_Solution_20210203.ipynb";
+    "C:/Users/Park/Box/Park_Sp2021/ACCY575/Cases_Sp20/3 Databases/Database_Solution_22Feb2021.ipynb";
   const graderCellKeywordPattern = "# GRADER[S_ ]{0,2}ONLY";
+
+  await stripFile(solutionFilePath, graderCellKeywordPattern);
 
   // await unstripFile(
   //   studentFilePath,
@@ -200,13 +267,13 @@ export async function unstripFile(
   //   graderCellKeywordPattern
   // );
 
-  const filePaths = glob.sync(
-    "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/**/*.ipynb"
-  );
+  // const filePaths = glob.sync(
+  //   "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/**/*.ipynb"
+  // );
 
-  console.log(`Start unstripping ${filePaths.length} files`);
+  // console.log(`Start unstripping ${filePaths.length} files`);
 
-  await unstripFiles(filePaths, solutionFilePath, graderCellKeywordPattern);
+  // await unstripFiles(filePaths, solutionFilePath, graderCellKeywordPattern);
 
   console.log("Done!");
 })();
