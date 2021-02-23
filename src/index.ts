@@ -1,8 +1,10 @@
-import { promises as fs } from "fs";
+import * as fs from "fs";
 import * as path from "path";
 import * as _ from "lodash";
 import * as stringSimilarity from "string-similarity";
 import * as glob from "glob";
+
+const fsPromises = fs.promises;
 
 export interface ICell {
   cell_type: string;
@@ -134,15 +136,21 @@ export async function unstripFiles(
   originalFilePath: string,
   pattern: string | RegExp
 ) {
-  const originalNotebookJSON = await fs.readFile(originalFilePath, "utf-8");
+  await fsPromises.access(originalFilePath, fs.constants.F_OK);
+
+  const originalNotebookJSON = await fsPromises.readFile(
+    originalFilePath,
+    "utf-8"
+  );
   const originalNotebook = JSON.parse(originalNotebookJSON);
   const originalCells = originalNotebook["cells"];
   const insertCellGroups = getInsertCellGroups(originalCells, pattern);
 
   for (const filePath of filePaths) {
     console.log(`Unstripping ${filePath}`);
+    await fsPromises.access(filePath, fs.constants.F_OK);
 
-    const targetNotebookJSON = await fs.readFile(filePath, "utf-8");
+    const targetNotebookJSON = await fsPromises.readFile(filePath, "utf-8");
     const targetNotebook = JSON.parse(targetNotebookJSON);
     let unstrippedCells = targetNotebook["cells"];
 
@@ -177,12 +185,12 @@ export async function unstripFiles(
       ext: pathObject.ext,
     });
 
-    await fs.writeFile(newFilePath, JSON.stringify(targetNotebook));
+    await fsPromises.writeFile(newFilePath, JSON.stringify(targetNotebook));
   }
 }
 
 export async function stripFile(filePath: string, pattern: string | RegExp) {
-  const notebookJSON = await fs.readFile(filePath, "utf-8");
+  const notebookJSON = await fsPromises.readFile(filePath, "utf-8");
   const notebookData = JSON.parse(notebookJSON);
   const cells: ICell[] = notebookData["cells"];
   const filteredCells: ICell[] = [];
@@ -241,7 +249,7 @@ export async function stripFile(filePath: string, pattern: string | RegExp) {
     ext: pathObject.ext,
   });
 
-  await fs.writeFile(newFilePath, JSON.stringify(notebookData));
+  await fsPromises.writeFile(newFilePath, JSON.stringify(notebookData));
 }
 
 export async function unstripFile(
@@ -253,13 +261,13 @@ export async function unstripFile(
 }
 
 (async () => {
-  // const solutionFilePath =
-  //   "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/PCard_Solution_20210203.ipynb";
   const solutionFilePath =
-    "C:/Users/Park/Box/Park_Sp2021/ACCY575/Cases_Sp20/3 Databases/Database_Solution_22Feb2021.ipynb";
+    "C:/Users/Park/Box/Park_Sp2021/ACCY575/Cases_Sp20/2 P-Card/PCard_Solution_20210222.ipynb";
   const graderCellKeywordPattern = "# GRADER[S_ ]{0,2}ONLY";
 
-  await stripFile(solutionFilePath, graderCellKeywordPattern);
+  // const solutionFilePath =
+  //   "C:/Users/Park/Box/Park_Sp2021/ACCY575/Cases_Sp20/3 Databases/Database_Solution_22Feb2021.ipynb";
+  // await stripFile(solutionFilePath, graderCellKeywordPattern);
 
   // await unstripFile(
   //   studentFilePath,
@@ -267,13 +275,13 @@ export async function unstripFile(
   //   graderCellKeywordPattern
   // );
 
-  // const filePaths = glob.sync(
-  //   "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/**/*.ipynb"
-  // );
+  const filePaths = glob.sync(
+    "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/sections-ABC/*.ipynb"
+  );
 
-  // console.log(`Start unstripping ${filePaths.length} files`);
+  console.log(`Start unstripping ${filePaths.length} files`);
 
-  // await unstripFiles(filePaths, solutionFilePath, graderCellKeywordPattern);
+  await unstripFiles(filePaths, solutionFilePath, graderCellKeywordPattern);
 
   console.log("Done!");
 })();
