@@ -4,25 +4,10 @@ import * as _ from "lodash";
 import * as stringSimilarity from "string-similarity";
 import * as glob from "glob";
 
+import { ICell } from "./typings/jupyter";
+import { CellInsertPosition, IInsertCellGroup } from "./typings/unstrip";
+
 const fsPromises = fs.promises;
-
-export interface ICell {
-  cell_type: string;
-  metadata: any;
-  source: string | string[];
-}
-
-export enum CellInsertPosition {
-  First = "First",
-  Last = "Last",
-  BeforeCell = "BeforeCell",
-}
-
-export interface IInsertCellGroup {
-  cells: ICell[];
-  insertPosition: CellInsertPosition;
-  matchCell?: ICell;
-}
 
 export function doesCellContainPattern(cell: ICell, pattern: string | RegExp) {
   if (!(pattern instanceof RegExp)) {
@@ -42,7 +27,7 @@ export function doesCellContainPattern(cell: ICell, pattern: string | RegExp) {
   return false;
 }
 
-export function getEmptyInsertCellGroup() {
+export function getEmptyInsertCellGroup(): IInsertCellGroup {
   return {
     cells: [],
     insertPosition: null,
@@ -276,7 +261,7 @@ export async function unstripFile(
   // );
 
   const filePaths = glob.sync(
-    "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/sections-ABC/*.ipynb"
+    "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/sections-EGH/*.ipynb"
   );
 
   console.log(`Start unstripping ${filePaths.length} files`);
