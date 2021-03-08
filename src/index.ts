@@ -245,9 +245,22 @@ export async function unstripFile(
   await unstripFiles([filePath], originalFilePath, pattern);
 }
 
+export async function stripTemplateCells(
+  cells: ICell[],
+  templateCells: ICell[]
+) {
+  const filteredCells: ICell[] = [];
+
+  for (const c of cells) {
+    if (findCellIndex(c, templateCells) >= 0) {
+      filteredCells.push(c);
+    }
+  }
+
+  return cells;
+}
+
 (async () => {
-  const solutionFilePath =
-    "C:/Users/Park/Box/Park_Sp2021/ACCY575/Cases_Sp20/2 P-Card/PCard_Solution_20210222.ipynb";
   const graderCellKeywordPattern = "# GRADER[S_ ]{0,2}ONLY";
 
   // const solutionFilePath =
@@ -260,13 +273,32 @@ export async function unstripFile(
   //   graderCellKeywordPattern
   // );
 
-  const filePaths = glob.sync(
-    "C:/Users/Park/Documents/accy575-sp2021-grading/02-pcard/sections-EGH/*.ipynb"
+  // await stripFile(solutionFilePath, graderCellKeywordPattern);
+  // const solutionFilePath =
+  //   "C:/Users/Park/Documents/accy575-sp2021-grading/03-database/Database_Solution_25Feb2021.ipynb";
+
+  // const submissionFilesPath = glob.sync(
+  //   "C:/Users/Park/Documents/accy575-sp2021-grading/03-database/organized/*.ipynb"
+  // );
+
+  // console.log(`Start unstripping ${submissionFilesPath.length} files`);
+
+  await stripFile(
+    "C:/Users/Park/Box/Park_Sp2021/BDI475/quizzes/quiz-03-KEY.ipynb",
+    graderCellKeywordPattern
   );
 
-  console.log(`Start unstripping ${filePaths.length} files`);
+  // await unstripFiles(
+  //   submissionFilesPath,
+  //   solutionFilePath,
+  //   graderCellKeywordPattern
+  // );
 
-  await unstripFiles(filePaths, solutionFilePath, graderCellKeywordPattern);
+  // const submissionFilePaths = glob.sync(
+  //   "C:/Users/Park/Documents/accy575-sp2021-grading/03-database/organized/*.ipynb"
+  // );
+
+  // submissionFilePaths.forEach((p) => {});
 
   console.log("Done!");
 })();
