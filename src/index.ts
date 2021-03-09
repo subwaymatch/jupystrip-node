@@ -4,7 +4,7 @@ import * as _ from "lodash";
 import * as stringSimilarity from "string-similarity";
 import * as glob from "glob";
 
-import { ICell } from "./typings/jupyter";
+import { INotebook, ICell } from "./typings/jupyter";
 import { CellInsertPosition, IInsertCellGroup } from "./typings/unstrip";
 
 const fsPromises = fs.promises;
@@ -116,6 +116,14 @@ export function findCellIndex(
   return -1;
 }
 
+export async function readNotebook(filePath: string): Promise<INotebook> {
+  await fsPromises.access(filePath, fs.constants.F_OK);
+
+  const originalNotebookJSON = await fsPromises.readFile(filePath, "utf-8");
+
+  return JSON.parse(originalNotebookJSON) as INotebook;
+}
+
 export async function unstripFiles(
   filePaths: string[],
   originalFilePath: string,
@@ -174,10 +182,13 @@ export async function unstripFiles(
   }
 }
 
-export async function stripFile(filePath: string, pattern: string | RegExp) {
-  const notebookJSON = await fsPromises.readFile(filePath, "utf-8");
-  const notebookData = JSON.parse(notebookJSON);
-  const cells: ICell[] = notebookData["cells"];
+export async function stripFile(
+  filePath: string,
+  pattern: string | RegExp,
+  clearOutputs = true
+) {
+  const notebook = await readNotebook(filePath);
+  const cells: ICell[] = notebook["cells"];
   const filteredCells: ICell[] = [];
 
   for (let i = 0; i < cells.length; i++) {
@@ -219,13 +230,19 @@ export async function stripFile(filePath: string, pattern: string | RegExp) {
 
           cell.source = newLines;
         }
+
+        if (clearOutputs) {
+          delete cell["execution_count"];
+          delete cell["outputs"];
+          delete cell["output_type"];
+        }
       }
 
       filteredCells.push(cell);
     }
   }
 
-  notebookData["cells"] = filteredCells;
+  notebook["cells"] = filteredCells;
 
   const pathObject = path.parse(filePath);
   const newFilePath = path.format({
@@ -234,7 +251,7 @@ export async function stripFile(filePath: string, pattern: string | RegExp) {
     ext: pathObject.ext,
   });
 
-  await fsPromises.writeFile(newFilePath, JSON.stringify(notebookData));
+  await fsPromises.writeFile(newFilePath, JSON.stringify(notebook));
 }
 
 export async function unstripFile(
@@ -273,20 +290,16 @@ export async function stripTemplateCells(
   //   graderCellKeywordPattern
   // );
 
-  // await stripFile(solutionFilePath, graderCellKeywordPattern);
+  await stripFile(
+    `C:/Users/Park/Box/Park_Sp2021/BDI475/in-class-exercises/L12-pandas-filter-and-sort-solution.ipynb`,
+    graderCellKeywordPattern
+  );
   // const solutionFilePath =
   //   "C:/Users/Park/Documents/accy575-sp2021-grading/03-database/Database_Solution_25Feb2021.ipynb";
 
   // const submissionFilesPath = glob.sync(
   //   "C:/Users/Park/Documents/accy575-sp2021-grading/03-database/organized/*.ipynb"
   // );
-
-  // console.log(`Start unstripping ${submissionFilesPath.length} files`);
-
-  await stripFile(
-    "C:/Users/Park/Box/Park_Sp2021/BDI475/quizzes/quiz-03-KEY.ipynb",
-    graderCellKeywordPattern
-  );
 
   // await unstripFiles(
   //   submissionFilesPath,
@@ -297,8 +310,6 @@ export async function stripTemplateCells(
   // const submissionFilePaths = glob.sync(
   //   "C:/Users/Park/Documents/accy575-sp2021-grading/03-database/organized/*.ipynb"
   // );
-
-  // submissionFilePaths.forEach((p) => {});
 
   console.log("Done!");
 })();
