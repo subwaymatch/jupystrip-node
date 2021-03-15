@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { INotebook } from "typings/jupyter";
+import { INotebook } from "./typings/jupyter";
 
 const fsPromises = fs.promises;
 

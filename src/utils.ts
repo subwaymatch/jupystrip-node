@@ -1,4 +1,4 @@
-import { ICell } from "typings/jupyter";
+import { ICell } from "./typings/jupyter";
 import * as stringSimilarity from "string-similarity";
 
 export function doesCellContainPattern(cell: ICell, pattern: string | RegExp) {

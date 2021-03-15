@@ -1,6 +1,6 @@
 import { INotebook, ICell } from "./typings/jupyter";
 import { CellInsertPosition, IInsertCellGroup } from "./typings/unstrip";
-import { doesCellContainPattern, findCellIndex } from "utils";
+import { doesCellContainPattern, findCellIndex } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
 

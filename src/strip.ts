@@ -1,8 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ICell } from "typings/jupyter";
-import { readNotebook } from "io";
-import { doesCellContainPattern, findCellIndex } from "utils";
+import { readNotebook } from "./io";
+import { doesCellContainPattern, findCellIndex } from "./utils";
 
 const fsPromises = fs.promises;
 
