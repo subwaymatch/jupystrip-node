@@ -101,3 +101,23 @@ export async function stripTemplateCells(
 
   await fsPromises.writeFile(newFilePath, JSON.stringify(userNotebook));
 }
+
+export async function stripCellsByPattern(
+  filePath: string,
+  pattern: string | RegExp
+) {
+  const notebook = await readNotebook(filePath);
+
+  notebook.cells = notebook.cells.filter(
+    (cell) => !doesCellContainPattern(cell, pattern)
+  );
+
+  const pathObject = path.parse(filePath);
+  const newFilePath = path.format({
+    dir: pathObject.dir,
+    name: pathObject.name + "_stripped",
+    ext: pathObject.ext,
+  });
+
+  await fsPromises.writeFile(newFilePath, JSON.stringify(notebook));
+}
